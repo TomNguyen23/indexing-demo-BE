@@ -1,6 +1,6 @@
 import { Connection, PublicKey } from '@solana/web3.js';
-// import { EventParser } from '@coral-xyz/anchor';
-import { EventParser } from '@project-serum/anchor';
+import * as anchor from "@coral-xyz/anchor";
+import { EventParser } from '@coral-xyz/anchor';
 import { parseEventsFromLogs, validateEventData } from './parser';
 import { storeEvent } from './db';
 import idl from './indexing_demo.json';
@@ -24,8 +24,10 @@ export const startListening = async (): Promise<void> => {
     console.log(`Starting to listen for events from program: ${PROGRAM_ID.toString()}`);
     console.log(`Connected to: ${RPC_ENDPOINT}`);
 
+    const program = getProgram(connection);
+    
     // Create event parser
-    const eventParser = new EventParser(PROGRAM_ID, idl as any);    
+    const eventParser = new EventParser(program.programId, program.coder);    
 
     // Listen to program logs
     const subscriptionId = connection.onLogs(
@@ -62,7 +64,7 @@ export const startListening = async (): Promise<void> => {
 async function processLogs(logs: any, eventParser: EventParser): Promise<void> {
   try {
     // Parse all events from logs using Anchor EventParser
-    const events = parseEventsFromLogs(logs.logs, eventParser);
+    const events = await parseEventsFromLogs(logs, eventParser, connection);
     
     if (events.length === 0) {
       console.log(`ℹ️  No events found in logs`);
@@ -71,7 +73,7 @@ async function processLogs(logs: any, eventParser: EventParser): Promise<void> {
 
     // Process each found event
     for (const event of events) {
-      if (event.name === 'PetPurchaseEvent') {
+      if (event.name === 'petPurchaseEvent') {
         console.log("🐶 Found Pet Purchase Event:");
         console.log(`  Event data:`, event.data);
         
@@ -91,16 +93,16 @@ async function processLogs(logs: any, eventParser: EventParser): Promise<void> {
 
 async function handlePetPurchaseEvent(eventData: any, signature: string): Promise<void> {
   try {
-    console.log(`  Shop: ${eventData.shope_pet?.toString() || eventData.shop || 'Unknown'}`);
+    console.log(`  Shop: ${eventData.shopePet?.toString() || 'Unknown'}`);
     console.log(`  Buyer: ${eventData.buyer?.toString() || 'Unknown'}`);
-    console.log(`  Pet Name: ${eventData.pet_name || 'Unknown'}`);
+    console.log(`  Pet Name: ${eventData.petName || 'Unknown'}`);
     console.log(`  Signature: ${signature}`);
 
     // Store event in database
     await storeEvent({
-      shop: eventData.shope_pet?.toString() || eventData.shop || 'Unknown',
+      shop: eventData.shopePet?.toString() || 'Unknown',
       buyer: eventData.buyer?.toString() || 'Unknown',
-      pet_name: eventData.pet_name || 'Unknown',
+      pet_name: eventData.petName || 'Unknown',
       signature: signature,
       timestamp: new Date()
     });
@@ -109,4 +111,11 @@ async function handlePetPurchaseEvent(eventData: any, signature: string): Promis
   } catch (error) {
     console.error('❌ Error handling pet purchase event:', error);
   }
+}
+
+
+const getProgram = (connection: Connection) => {
+  return new anchor.Program(idl, {
+    connection: new anchor.web3.Connection(connection.rpcEndpoint),
+  });
 }

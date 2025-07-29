@@ -1,6 +1,6 @@
-// import { EventParser } from '@coral-xyz/anchor';
-import { EventParser } from '@project-serum/anchor';
-import { PublicKey } from '@solana/web3.js';
+import { EventParser } from '@coral-xyz/anchor';
+import * as anchor from '@coral-xyz/anchor';
+import { Connection } from '@solana/web3.js';
 
 export interface ParsedEvent {
   name: string;
@@ -11,13 +11,14 @@ export interface ParsedEvent {
 /**
  * Parse events from logs using only Anchor's EventParser
  */
-export const parseEventsFromLogs = (logs: string[], eventParser: EventParser): ParsedEvent[] => {
+export const parseEventsFromLogs = async (logs: anchor.web3.Logs, eventParser: EventParser, connection: Connection): Promise<ParsedEvent[]> => {
   try {
-    console.log(`🔍 Parsing ${logs.length} log lines with Anchor EventParser`);
-    
-    const events = Array.from(eventParser.parseLogs(logs));
+    console.log(`🔍 Parsing logs with Anchor EventParser`);
+
+    const tx = await connection.getParsedTransaction(logs.signature);
+    const events = eventParser.parseLogs(tx?.meta?.logMessages || []);
+
     const parsedEvents: ParsedEvent[] = [];
-    
     for (const event of events) {
       if (event && event.name) {
         console.log(`✅ Found event: ${event.name}`);
@@ -27,7 +28,7 @@ export const parseEventsFromLogs = (logs: string[], eventParser: EventParser): P
         });
       }
     }
-    
+
     return parsedEvents;
   } catch (error) {
     console.log(`⚠️ Anchor EventParser failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -43,7 +44,7 @@ export const validateEventData = (eventData: any): boolean => {
   if (!eventData) return false;
   
   try {
-    return !!(eventData.shope_pet && eventData.buyer && eventData.pet_name);
+    return !!(eventData.shopePet && eventData.buyer && eventData.petName);
   } catch (error) {
     return false;
   }
